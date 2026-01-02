@@ -129,6 +129,8 @@ let currentQuestions = [{
 // Рендеринг формы вопросов
 function renderQuestionsForm() {
     const container = document.getElementById('questions-container');
+    if (!container) return;
+    
     container.innerHTML = currentQuestions.map((question, questionIndex) => `
         <div class="question-item" data-question-index="${questionIndex}">
             <div class="question-header">
@@ -143,7 +145,7 @@ function renderQuestionsForm() {
                        value="${Utils.escapeHtml(question.text)}"
                        placeholder="Введите текст вопроса"
                        required>
-                <div class="error-message question-error" id="questionError${questionIndex}">
+                <div class="error-message question-error" id="questionError${questionIndex}" style="display: none;">
                     Пожалуйста, введите текст вопроса
                 </div>
             </div>
@@ -167,7 +169,7 @@ function renderQuestionsForm() {
                     </div>
                 `).join('')}
             </div>
-            <div class="error-message options-error" id="optionsError${questionIndex}">
+            <div class="error-message options-error" id="optionsError${questionIndex}" style="display: none;">
                 Пожалуйста, выберите правильный ответ
             </div>
         </div>
@@ -183,7 +185,9 @@ function addQuestionInputListeners() {
     document.querySelectorAll('.question-text-input').forEach(input => {
         input.addEventListener('input', (e) => {
             const index = parseInt(e.target.dataset.questionIndex);
-            currentQuestions[index].text = e.target.value;
+            currentQuestions[index].text = e.target.value.trim();
+            hideError(`questionError${index}`);
+            e.target.classList.remove('error');
         });
     });
     
@@ -192,7 +196,8 @@ function addQuestionInputListeners() {
         input.addEventListener('input', (e) => {
             const questionIndex = parseInt(e.target.dataset.questionIndex);
             const optionIndex = parseInt(e.target.dataset.optionIndex);
-            currentQuestions[questionIndex].options[optionIndex] = e.target.value;
+            currentQuestions[questionIndex].options[optionIndex] = e.target.value.trim();
+            e.target.classList.remove('error');
         });
     });
     
@@ -202,8 +207,25 @@ function addQuestionInputListeners() {
             const questionIndex = parseInt(e.target.dataset.questionIndex);
             const optionIndex = parseInt(e.target.dataset.optionIndex);
             currentQuestions[questionIndex].correctAnswer = optionIndex;
+            hideError(`optionsError${questionIndex}`);
         });
     });
+}
+
+// Скрыть ошибку
+function hideError(errorId) {
+    const errorElement = document.getElementById(errorId);
+    if (errorElement) {
+        errorElement.style.display = 'none';
+    }
+}
+
+// Показать ошибку
+function showError(errorId) {
+    const errorElement = document.getElementById(errorId);
+    if (errorElement) {
+        errorElement.style.display = 'block';
+    }
 }
 
 // Добавление вопроса
@@ -235,12 +257,12 @@ function validateQuestion(index) {
     const questionError = document.getElementById(`questionError${index}`);
     
     if (!question.text.trim()) {
-        questionInput.classList.add('error');
-        questionError.classList.add('show');
+        if (questionInput) questionInput.classList.add('error');
+        if (questionError) questionError.style.display = 'block';
         isValid = false;
     } else {
-        questionInput.classList.remove('error');
-        questionError.classList.remove('show');
+        if (questionInput) questionInput.classList.remove('error');
+        if (questionError) questionError.style.display = 'none';
     }
     
     // Валидация вариантов ответов
@@ -248,24 +270,37 @@ function validateQuestion(index) {
     question.options.forEach((option, i) => {
         const optionInput = document.querySelector(`.option-input[data-question-index="${index}"][data-option-index="${i}"]`);
         if (!option.trim()) {
-            optionInput.classList.add('error');
+            if (optionInput) optionInput.classList.add('error');
             hasEmptyOptions = true;
             isValid = false;
         } else {
-            optionInput.classList.remove('error');
+            if (optionInput) optionInput.classList.remove('error');
         }
     });
     
     // Валидация правильного ответа
     const optionsError = document.getElementById(`optionsError${index}`);
     if (question.correctAnswer === null) {
-        optionsError.classList.add('show');
+        if (optionsError) optionsError.style.display = 'block';
         isValid = false;
     } else {
-        optionsError.classList.remove('show');
+        if (optionsError) optionsError.style.display = 'none';
     }
     
     return isValid;
+}
+
+// Валидация всей формы
+function validateAllQuestions() {
+    let allValid = true;
+    
+    currentQuestions.forEach((_, index) => {
+        if (!validateQuestion(index)) {
+            allValid = false;
+        }
+    });
+    
+    return allValid;
 }
 
 // Сброс формы
@@ -277,11 +312,15 @@ function resetForm() {
         correctAnswer: null
     }];
     
-    document.getElementById('new-test-form').reset();
-    document.getElementById('testTitle').value = '';
+    const form = document.getElementById('new-test-form');
+    if (form) form.reset();
     
+    const titleInput = document.getElementById('testTitle');
+    if (titleInput) titleInput.value = '';
+    
+    // Скрываем все ошибки
     document.querySelectorAll('.error-message').forEach(el => {
-        el.classList.remove('show');
+        el.style.display = 'none';
     });
     
     document.querySelectorAll('.error').forEach(el => {
@@ -296,27 +335,21 @@ async function handleSubmitTest(e) {
     // Валидация названия теста
     const titleInput = document.getElementById('testTitle');
     const titleError = document.getElementById('titleError');
-    const title = titleInput.value.trim();
+    const title = titleInput?.value.trim() || '';
     
     if (!title) {
-        titleInput.classList.add('error');
-        titleError.classList.add('show');
-        titleInput.focus();
+        if (titleInput) titleInput.classList.add('error');
+        if (titleError) titleError.style.display = 'block';
+        if (titleInput) titleInput.focus();
         return;
     }
-    titleInput.classList.remove('error');
-    titleError.classList.remove('show');
+    
+    if (titleInput) titleInput.classList.remove('error');
+    if (titleError) titleError.style.display = 'none';
     
     // Валидация всех вопросов
-    let isValid = true;
-    currentQuestions.forEach((_, i) => {
-        if (!validateQuestion(i)) {
-            isValid = false;
-        }
-    });
-    
-    if (!isValid) {
-        Modal.alert({
+    if (!validateAllQuestions()) {
+        await Modal.alert({
             title: 'Ошибка',
             message: 'Пожалуйста, заполните все поля и выберите правильные ответы'
         });
@@ -327,17 +360,29 @@ async function handleSubmitTest(e) {
     Modal.showLoader();
     
     try {
-        // Сохранение теста
+        // Подготовка данных теста
         const testData = {
             title: title,
             questions: currentQuestions.map(q => ({
                 id: q.id,
-                text: q.text,
-                options: q.options,
+                text: q.text.trim(),
+                options: q.options.map(opt => opt.trim()),
                 correctAnswer: q.correctAnswer
             }))
         };
         
+        // Проверяем, что все вопросы имеют правильные ответы
+        const hasInvalidQuestion = testData.questions.some(q => 
+            q.correctAnswer === null || 
+            q.correctAnswer < 0 || 
+            q.correctAnswer > 3
+        );
+        
+        if (hasInvalidQuestion) {
+            throw new Error('Не все вопросы имеют правильный ответ');
+        }
+        
+        // Сохранение теста
         const testId = TestManager.addTest(testData);
         
         // Скрываем индикатор загрузки
@@ -356,10 +401,11 @@ async function handleSubmitTest(e) {
         window.location.href = `test.html?testId=${testId}`;
         
     } catch (error) {
+        console.error('Ошибка создания теста:', error);
         Modal.hideLoader();
-        Modal.alert({
+        await Modal.alert({
             title: 'Ошибка',
-            message: 'Не удалось создать тест. Попробуйте еще раз.'
+            message: 'Не удалось создать тест. Убедитесь, что все поля заполнены правильно.'
         });
     }
 }
@@ -380,6 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     if (saveTestBtn) {
+        // Обработчик для кнопки Сохранить
         saveTestBtn.addEventListener('click', handleSubmitTest);
     }
     
