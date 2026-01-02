@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Прохождение теста</title>
+    <link rel="stylesheet" href="css/reset.css">
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="test-header">
+            <div>
+                <h1 test-id="test-title" id="testTitle">Загрузка теста...</h1>
+            </div>
+            <button class="btn btn-secondary" test-id="back-to-test-list-page" id="backToListBtn">
+                ← К списку тестов
+            </button>
+        </div>
+        
+        <div class="test-content">
+            <!-- Навигация по вопросам (десктоп) -->
+            <nav class="navigation-sidebar" test-id="navigation">
+                <div class="navigation-list" id="navigationList">
+                    <!-- Навигационные элементы будут добавлены через JS -->
+                </div>
+            </nav>
+            
+            <!-- Область вопроса -->
+            <div class="question-area">
+                <div class="question-container">
+                    <div test-id="question">
+                        <h2 class="question-text" id="questionText">Загрузка вопроса...</h2>
+                        <div class="options-list" id="optionsList">
+                            <!-- Варианты ответов будут добавлены через JS -->
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="navigation-controls">
+                    <div class="nav-buttons">
+                        <button class="nav-btn" test-id="prev-question" id="prevQuestionBtn" disabled>
+                            ←
+                        </button>
+                        <button class="nav-btn" test-id="next-question" id="nextQuestionBtn">
+                            →
+                        </button>
+                    </div>
+                    
+                    <div>
+                        <button class="btn btn-primary" test-id="finish-button" id="finishTestBtn">
+                            Завершить тест
+                        </button>
+                        <button class="btn btn-secondary" test-id="reset-test-button" id="resetTestBtn" style="display: none;">
+                            Пройти заново
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/utils.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/modal.js"></script>
+    <script src="js/testRunner.js"></script>
+</body>
+</html>

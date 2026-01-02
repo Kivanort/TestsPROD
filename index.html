@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Платформа тестов</title>
+    <link rel="stylesheet" href="css/reset.css">
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1 test-id="list-title">Платформа тестов</h1>
+            <p test-id="list-subtitle">Выберите тест для прохождения</p>
+        </header>
+        
+        <div class="tests-container" test-id="list-items">
+            <!-- Тесты будут загружены через JS -->
+        </div>
+        
+        <button class="add-test-btn" test-id="list-add-button" id="addTestBtn">
+            <span>+</span> Добавить тест
+        </button>
+    </div>
+
+    <!-- Модальное окно добавления теста -->
+    <div class="modal-overlay" test-id="form-modal" id="addTestModal" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 test-id="form-title">Создание нового теста</h2>
+                <button class="close-btn" data-modal-close>✕</button>
+            </div>
+            
+            <form id="new-test-form">
+                <div class="form-group">
+                    <label>Название теста:</label>
+                    <input type="text" test-id="new-test-title" id="testTitle" required>
+                    <div class="error-message" id="titleError">Пожалуйста, введите название теста</div>
+                </div>
+                
+                <div id="questions-container">
+                    <!-- Вопросы будут добавляться динамически -->
+                </div>
+                
+                <div class="question-controls">
+                    <button type="button" class="control-btn" test-id="add-question-button" id="addQuestionBtn">
+                        +
+                    </button>
+                    <button type="button" class="control-btn" test-id="remove-question-button" id="removeQuestionBtn">
+                        -
+                    </button>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" data-modal-close>
+                        Отмена
+                    </button>
+                    <button type="submit" class="btn btn-primary" test-id="save-button" id="saveTestBtn">
+                        Сохранить тест
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/utils.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/modal.js"></script>
+    <script src="js/testManager.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
