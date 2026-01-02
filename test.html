@@ -61,9 +61,56 @@
         </div>
     </div>
 
+    <!-- Модальное окно результатов -->
+    <div class="modal-overlay" test-id="modal" id="resultsModal" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Результаты теста</h2>
+                <button class="close-btn" onclick="closeResultsModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="results-content">
+                    <div class="results-stats" id="resultsStats">
+                        <!-- Статистика будет добавлена через JS -->
+                    </div>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" id="closeResultsBtn" onclick="closeResultsModal()">
+                    Понятно
+                </button>
+                <button type="button" class="btn btn-primary" id="resetTestModalBtn" style="display: none;" onclick="confirmResetTest()">
+                    Пройти заново
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно подтверждения сброса -->
+    <div class="modal-overlay" id="confirmResetModal" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Подтверждение</h2>
+                <button class="close-btn" onclick="closeConfirmResetModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <p>Вы уверены, что хотите начать тест заново? Весь прогресс будет потерян.</p>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeConfirmResetModal()">
+                    Отмена
+                </button>
+                <button type="button" class="btn btn-primary" onclick="confirmResetTest()">
+                    Да
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="js/utils.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/modal.js"></script>
+    <script src="js/testManager.js"></script>
     <script src="js/testRunner.js"></script>
 </body>
 </html>
