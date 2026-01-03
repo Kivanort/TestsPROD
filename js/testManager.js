@@ -1,434 +1,447 @@
-// Запуск и управление тестом
-const TestRunner = {
-    currentTest: null,
-    currentQuestionIndex: 0,
-    userAnswers: {},
-    isCompleted: false,
+// Управление тестами
+const TestManager = {
+    tests: [],
+    userTests: [],
     
-    // Инициализация теста
+    // Инициализация
     async init() {
-        const testId = Utils.getUrlParam('testId');
-        if (!testId) {
-            window.location.href = 'index.html';
-            return;
-        }
-        
-        // Загрузка теста
         try {
-            await TestManager.init();
-            this.currentTest = TestManager.findTestById(testId);
-            
-            if (!this.currentTest) {
-                await Modal.alert({
-                    title: 'Ошибка',
-                    message: 'Тест не найден'
-                });
-                window.location.href = 'index.html';
-                return;
+            // Загрузка дефолтных тестов
+            const response = await fetch('data.json');
+            if (response.ok) {
+                const data = await response.json();
+                this.tests = data.tests || [];
+                // Помечаем дефолтные тесты
+                this.tests.forEach(test => test.isDefault = true);
+                Storage.saveTests(data);
             }
-            
-            // Загрузка прогресса
-            this.loadProgress();
-            
-            // Настройка кнопок
-            this.setupEventListeners();
-            
-            // Отображение теста
-            this.renderTest();
-            this.renderNavigation();
-            this.showQuestion(this.currentQuestionIndex);
-            
         } catch (error) {
-            console.error('Ошибка инициализации теста:', error);
-            await Modal.alert({
-                title: 'Ошибка',
-                message: 'Не удалось загрузить тест'
-            });
-            window.location.href = 'index.html';
+            console.error('Ошибка загрузки тестов:', error);
+            this.tests = [];
         }
+        
+        // Загрузка пользовательских тестов
+        this.userTests = Storage.loadUserTests();
+        
+        // Рендеринг списка тестов
+        this.renderTestList();
     },
     
-    // Настройка обработчиков событий
-    setupEventListeners() {
-        // Кнопки навигации
-        const prevBtn = document.getElementById('prevQuestionBtn');
-        const nextBtn = document.getElementById('nextQuestionBtn');
-        const finishBtn = document.getElementById('finishTestBtn');
-        const resetBtn = document.getElementById('resetTestBtn');
-        const backBtn = document.getElementById('backToListBtn');
-        
-        if (prevBtn) {
-            prevBtn.addEventListener('click', () => this.prevQuestion());
-        }
-        
-        if (nextBtn) {
-            nextBtn.addEventListener('click', () => this.nextQuestion());
-        }
-        
-        if (finishBtn) {
-            finishBtn.addEventListener('click', () => this.finishTest());
-        }
-        
-        if (resetBtn) {
-            resetBtn.addEventListener('click', () => this.resetTest());
-        }
-        
-        if (backBtn) {
-            backBtn.addEventListener('click', () => {
-                window.location.href = 'index.html';
-            });
-        }
+    // Получение всех тестов
+    getAllTests() {
+        return [...this.tests, ...this.userTests];
     },
     
-    // Загрузка прогресса
-    loadProgress() {
-        const progress = Storage.loadProgress(this.currentTest.id);
-        if (progress) {
-            this.userAnswers = progress.answers || {};
-            this.currentQuestionIndex = progress.currentIndex || 0;
-            this.isCompleted = progress.isCompleted || false;
-        }
+    // Поиск теста по ID
+    findTestById(id) {
+        const allTests = this.getAllTests();
+        return allTests.find(test => test.id === id);
     },
     
-    // Сохранение прогресса
-    saveProgress() {
-        Storage.saveProgress(this.currentTest.id, {
-            answers: this.userAnswers,
-            currentIndex: this.currentQuestionIndex,
-            isCompleted: this.isCompleted,
-            lastUpdated: new Date().toISOString()
-        });
-    },
-    
-    // Отображение теста
-    renderTest() {
-        const testTitle = document.getElementById('testTitle');
-        if (testTitle) {
-            testTitle.textContent = this.currentTest.title;
-        }
-        
-        if (this.isCompleted) {
-            this.showResults();
-        }
-    },
-    
-    // Отображение навигации
-    renderNavigation() {
-        const navList = document.getElementById('navigationList');
-        if (!navList || !this.currentTest || !this.currentTest.questions) return;
-        
-        navList.innerHTML = this.currentTest.questions.map((question, index) => {
-            const isAnswered = this.userAnswers[index] !== undefined;
-            const isCorrect = isAnswered && 
-                this.userAnswers[index] === question.correctAnswer;
-            
-            let className = 'nav-item';
-            if (index === this.currentQuestionIndex) className += ' active';
-            if (isAnswered) {
-                className += isCorrect ? ' correct' : ' incorrect';
-            }
-            
-            return `
-                <div class="${className}" 
-                     test-id="navigation-item"
-                     onclick="TestRunner.goToQuestion(${index})">
-                    <span class="nav-number">${index + 1}</span>
-                    <span class="nav-text">Вопрос ${index + 1}</span>
-                </div>
-            `;
-        }).join('');
-    },
-    
-    // Показать вопрос
-    showQuestion(index) {
-        if (!this.currentTest || !this.currentTest.questions) return;
-        if (index < 0 || index >= this.currentTest.questions.length) return;
-        
-        this.currentQuestionIndex = index;
-        const question = this.currentTest.questions[index];
-        
-        // Обновляем навигацию
-        this.renderNavigation();
-        
-        // Обновляем кнопки навигации
-        const prevBtn = document.getElementById('prevQuestionBtn');
-        const nextBtn = document.getElementById('nextQuestionBtn');
-        
-        if (prevBtn) prevBtn.disabled = index === 0;
-        if (nextBtn) nextBtn.disabled = index === this.currentTest.questions.length - 1;
-        
-        // Отображаем вопрос
-        const questionText = document.getElementById('questionText');
-        if (questionText) {
-            questionText.textContent = question.text;
-        }
-        
-        // Отображаем варианты ответов
-        const optionsList = document.getElementById('optionsList');
-        if (!optionsList) return;
-        
-        const letters = ['A', 'B', 'C', 'D'];
-        const userAnswer = this.userAnswers[index];
-        const isAnswered = userAnswer !== undefined;
-        
-        optionsList.innerHTML = question.options.map((option, optionIndex) => {
-            let className = 'option-btn';
-            let statusIcon = '';
-            
-            if (isAnswered) {
-                if (optionIndex === question.correctAnswer) {
-                    className += ' correct';
-                    statusIcon = '✓';
-                } else if (optionIndex === userAnswer && optionIndex !== question.correctAnswer) {
-                    className += ' incorrect';
-                    statusIcon = '✗';
-                }
-                
-                if (optionIndex === userAnswer) {
-                    className += ' selected';
-                }
-            }
-            
-            return `
-                <button type="button" 
-                        class="${className}"
-                        test-id="question-option"
-                        ${isAnswered ? 'disabled' : ''}
-                        onclick="TestRunner.selectAnswer(${optionIndex})">
-                    <div class="option-content">
-                        <span class="option-letter">${letters[optionIndex]}</span>
-                        <span class="option-text">${Utils.escapeHtml(option)}</span>
-                        ${statusIcon ? `<span class="option-status">${statusIcon}</span>` : ''}
-                    </div>
-                </button>
-            `;
-        }).join('');
-        
-        this.saveProgress();
-    },
-    
-    // Выбор ответа
-    selectAnswer(answerIndex) {
-        if (this.isCompleted || !this.currentTest) return;
-        
-        this.userAnswers[this.currentQuestionIndex] = answerIndex;
-        this.saveProgress();
-        this.showQuestion(this.currentQuestionIndex);
-        this.renderNavigation();
-    },
-    
-    // Переход к вопросу
-    goToQuestion(index) {
-        this.showQuestion(index);
-    },
-    
-    // Следующий вопрос
-    nextQuestion() {
-        if (!this.currentTest || !this.currentTest.questions) return;
-        if (this.currentQuestionIndex < this.currentTest.questions.length - 1) {
-            this.showQuestion(this.currentQuestionIndex + 1);
-        }
-    },
-    
-    // Предыдущий вопрос
-    prevQuestion() {
-        if (this.currentQuestionIndex > 0) {
-            this.showQuestion(this.currentQuestionIndex - 1);
-        }
-    },
-    
-    // Завершение теста
-    async finishTest() {
-        if (!this.currentTest || !this.currentTest.questions) return;
-        
-        const answeredCount = Object.keys(this.userAnswers).length;
-        const totalQuestions = this.currentTest.questions.length;
-        
-        // Если не все вопросы отвечены, показываем подтверждение
-        if (answeredCount < totalQuestions) {
-            const confirmed = await Modal.confirm({
-                title: 'Завершить тест?',
-                message: `Вы ответили на ${answeredCount} из ${totalQuestions} вопросов. Завершить тест?`,
-                confirmText: 'Завершить',
-                cancelText: 'Продолжить'
-            });
-            
-            if (!confirmed) {
-                return;
-            }
-        }
-        
-        this.isCompleted = true;
-        this.saveProgress();
-        await this.showResultsModal();
-    },
-    
-    // Показать модальное окно с результатами
-    async showResultsModal() {
-        if (!this.currentTest) return;
-        
-        const results = this.calculateResults();
-        
-        // Проверяем, все ли вопросы отвечены
-        const allAnswered = results.unanswered === 0;
-        
-        const modalId = `results-modal-${Date.now()}`;
-        
-        const content = `
-            <div class="results-content">
-                <h3>Результаты теста</h3>
-                <div class="results-stats">
-                    <div class="stat-item">
-                        <span class="stat-label">Правильных ответов:</span>
-                        <span class="stat-value correct">${results.correct}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Неправильных ответов:</span>
-                        <span class="stat-value incorrect">${results.incorrect}</span>
-                    </div>
-                    ${results.unanswered > 0 ? `
-                        <div class="stat-item">
-                            <span class="stat-label">Вопросов без ответа:</span>
-                            <span class="stat-value unanswered">${results.unanswered}</span>
-                        </div>
-                    ` : ''}
-                </div>
-                <p>Всего вопросов: ${results.total}</p>
-            </div>
-        `;
-        
-        const buttons = [];
-        
-        if (allAnswered) {
-            buttons.push({
-                text: 'Пройти заново',
-                className: 'btn-primary',
-                onClick: `TestRunner.resetTestFromModal('${modalId}')`
-            });
-        } else {
-            buttons.push({
-                text: 'Понятно',
-                className: 'btn-primary',
-                onClick: `Modal.close(); Modal.remove('${modalId}')`
-            });
-        }
-        
-        // Создаем и открываем модальное окно
-        Modal.create({
-            id: modalId,
-            title: 'Результаты',
-            content: content,
-            buttons: buttons,
-            width: '500px'
-        });
-        
-        await Modal.open(modalId);
-        
-        // После закрытия модального окна показываем результаты
-        if (!allAnswered) {
-            this.showResults();
-        }
-    },
-    
-    // Рассчитать результаты
-    calculateResults() {
-        if (!this.currentTest || !this.currentTest.questions) {
-            return { correct: 0, incorrect: 0, unanswered: 0, total: 0 };
-        }
-        
-        let correct = 0;
-        let incorrect = 0;
-        
-        this.currentTest.questions.forEach((question, index) => {
-            const userAnswer = this.userAnswers[index];
-            
-            if (userAnswer !== undefined) {
-                if (userAnswer === question.correctAnswer) {
-                    correct++;
-                } else {
-                    incorrect++;
-                }
-            }
-        });
-        
-        const unanswered = this.currentTest.questions.length - (correct + incorrect);
-        
-        return {
-            correct,
-            incorrect,
-            unanswered,
-            total: this.currentTest.questions.length
+    // Добавление теста
+    addTest(testData) {
+        const newTest = {
+            id: Utils.generateId(),
+            title: testData.title,
+            questions: testData.questions,
+            isDefault: false,
+            createdAt: new Date().toISOString()
         };
-    },
-    
-    // Сбросить тест из модального окна
-    resetTestFromModal(modalId) {
-        Modal.close();
-        Modal.remove(modalId);
-        this.resetTest();
-    },
-    
-    // Сбросить тест
-    async resetTest() {
-        const confirmed = await Modal.confirm({
-            title: 'Пройти заново?',
-            message: 'Вы уверены, что хотите начать тест заново? Весь прогресс будет потерян.',
-            confirmText: 'Да',
-            cancelText: 'Отмена'
-        });
         
-        if (confirmed) {
-            this.userAnswers = {};
-            this.currentQuestionIndex = 0;
-            this.isCompleted = false;
-            
-            Storage.clearTestProgress(this.currentTest.id);
-            this.saveProgress();
-            
-            // Показываем кнопку завершения
-            const finishBtn = document.getElementById('finishTestBtn');
-            const resetBtn = document.getElementById('resetTestBtn');
-            
-            if (finishBtn) finishBtn.style.display = 'inline-block';
-            if (resetBtn) resetBtn.style.display = 'none';
-            
-            this.showQuestion(0);
-            this.renderNavigation();
+        this.userTests.push(newTest);
+        Storage.addUserTest(newTest);
+        
+        // Обновляем список
+        this.renderTestList();
+        
+        return newTest.id;
+    },
+    
+    // Удаление теста
+    deleteTest(testId) {
+        const test = this.findTestById(testId);
+        if (test?.isDefault) {
+            Modal.alert({
+                title: 'Ошибка',
+                message: 'Нельзя удалить стандартный тест'
+            });
+            return false;
         }
+        
+        Modal.confirm({
+            title: 'Удалить тест?',
+            message: 'Вы уверены, что хотите удалить этот тест?'
+        }).then(confirmed => {
+            if (confirmed) {
+                Storage.deleteUserTest(testId);
+                this.userTests = this.userTests.filter(t => t.id !== testId);
+                Storage.clearTestProgress(testId);
+                this.renderTestList();
+                
+                Modal.alert({
+                    title: 'Успешно',
+                    message: 'Тест успешно удален'
+                });
+            }
+        });
     },
     
-    // Показать результаты на странице
-    showResults() {
-        const finishBtn = document.getElementById('finishTestBtn');
-        const resetBtn = document.getElementById('resetTestBtn');
+    // Рендеринг списка тестов
+    renderTestList() {
+        const container = document.querySelector('[test-id="list-items"]');
+        if (!container) return;
         
-        if (finishBtn) finishBtn.style.display = 'none';
-        if (resetBtn) resetBtn.style.display = 'inline-block';
+        const allTests = this.getAllTests();
+        
+        container.innerHTML = allTests.map(test => `
+            <div class="test-card" onclick="window.location.href='test.html?testId=${test.id}'">
+                <h3 test-id="list-item-title">${Utils.escapeHtml(test.title)}</h3>
+                <div class="test-meta">
+                    <span>${test.questions?.length || 0} вопросов</span>
+                </div>
+                <button class="delete-btn" 
+                        test-id="list-item-delete"
+                        ${test.isDefault ? 'disabled' : ''}
+                        onclick="TestManager.handleDeleteTest(event, '${test.id}')">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"></path>
+                    </svg>
+                </button>
+            </div>
+        `).join('');
+    },
+    
+    // Обработчик удаления теста
+    handleDeleteTest(event, testId) {
+        event.stopPropagation();
+        this.deleteTest(testId);
     }
 };
 
-// Глобальные функции для теста
-function selectAnswer(index) {
-    TestRunner.selectAnswer(index);
+// Переменные для формы создания теста (должны быть глобальными)
+let currentQuestions = [{
+    id: 1,
+    text: '',
+    options: ['', '', '', ''],
+    correctAnswer: null
+}];
+
+// Рендеринг формы вопросов
+function renderQuestionsForm() {
+    const container = document.getElementById('questions-container');
+    if (!container) return;
+    
+    container.innerHTML = currentQuestions.map((question, questionIndex) => `
+        <div class="question-item" data-question-index="${questionIndex}">
+            <div class="question-header">
+                <span class="question-number">Вопрос ${questionIndex + 1}</span>
+            </div>
+            <div class="form-group">
+                <label>Текст вопроса:</label>
+                <input type="text" 
+                       test-id="new-test-question"
+                       class="question-text-input"
+                       data-question-index="${questionIndex}"
+                       value="${Utils.escapeHtml(question.text)}"
+                       placeholder="Введите текст вопроса"
+                       required>
+                <div class="error-message question-error" id="questionError${questionIndex}" style="display: none;">
+                    Пожалуйста, введите текст вопроса
+                </div>
+            </div>
+            
+            <div class="options-container" test-id="new-test-options">
+                ${question.options.map((option, optionIndex) => `
+                    <div class="option-row">
+                        <input type="radio" 
+                               name="correctAnswer${questionIndex}"
+                               data-question-index="${questionIndex}"
+                               data-option-index="${optionIndex}"
+                               ${question.correctAnswer === optionIndex ? 'checked' : ''}
+                               required>
+                        <input type="text"
+                               class="option-input"
+                               data-question-index="${questionIndex}"
+                               data-option-index="${optionIndex}"
+                               value="${Utils.escapeHtml(option)}"
+                               placeholder="Вариант ответа ${optionIndex + 1}"
+                               required>
+                    </div>
+                `).join('')}
+            </div>
+            <div class="error-message options-error" id="optionsError${questionIndex}" style="display: none;">
+                Пожалуйста, выберите правильный ответ
+            </div>
+        </div>
+    `).join('');
+    
+    // Добавляем обработчики
+    addQuestionInputListeners();
 }
 
-function nextQuestion() {
-    TestRunner.nextQuestion();
+// Добавление обработчиков для полей ввода
+function addQuestionInputListeners() {
+    // Тексты вопросов
+    document.querySelectorAll('.question-text-input').forEach(input => {
+        input.addEventListener('input', (e) => {
+            const index = parseInt(e.target.dataset.questionIndex);
+            currentQuestions[index].text = e.target.value.trim();
+            hideError(`questionError${index}`);
+            e.target.classList.remove('error');
+        });
+    });
+    
+    // Варианты ответов
+    document.querySelectorAll('.option-input').forEach(input => {
+        input.addEventListener('input', (e) => {
+            const questionIndex = parseInt(e.target.dataset.questionIndex);
+            const optionIndex = parseInt(e.target.dataset.optionIndex);
+            currentQuestions[questionIndex].options[optionIndex] = e.target.value.trim();
+            e.target.classList.remove('error');
+        });
+    });
+    
+    // Правильные ответы
+    document.querySelectorAll('input[type="radio"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            const questionIndex = parseInt(e.target.dataset.questionIndex);
+            const optionIndex = parseInt(e.target.dataset.optionIndex);
+            currentQuestions[questionIndex].correctAnswer = optionIndex;
+            hideError(`optionsError${questionIndex}`);
+        });
+    });
 }
 
-function prevQuestion() {
-    TestRunner.prevQuestion();
+// Скрыть ошибку
+function hideError(errorId) {
+    const errorElement = document.getElementById(errorId);
+    if (errorElement) {
+        errorElement.style.display = 'none';
+    }
 }
 
-function finishTest() {
-    TestRunner.finishTest();
+// Показать ошибку
+function showError(errorId) {
+    const errorElement = document.getElementById(errorId);
+    if (errorElement) {
+        errorElement.style.display = 'block';
+    }
 }
 
-function resetTest() {
-    TestRunner.resetTest();
+// Добавление вопроса
+function addQuestion() {
+    currentQuestions.push({
+        id: currentQuestions.length + 1,
+        text: '',
+        options: ['', '', '', ''],
+        correctAnswer: null
+    });
+    renderQuestionsForm();
 }
 
-// Инициализация при загрузке страницы
+// Удаление вопроса
+function removeQuestion() {
+    if (currentQuestions.length > 1) {
+        currentQuestions.pop();
+        renderQuestionsForm();
+    }
+}
+
+// Валидация вопроса
+function validateQuestion(index) {
+    const question = currentQuestions[index];
+    let isValid = true;
+    
+    // Валидация текста вопроса
+    const questionInput = document.querySelector(`.question-text-input[data-question-index="${index}"]`);
+    const questionError = document.getElementById(`questionError${index}`);
+    
+    if (!question.text.trim()) {
+        if (questionInput) questionInput.classList.add('error');
+        if (questionError) questionError.style.display = 'block';
+        isValid = false;
+    } else {
+        if (questionInput) questionInput.classList.remove('error');
+        if (questionError) questionError.style.display = 'none';
+    }
+    
+    // Валидация вариантов ответов
+    let hasEmptyOptions = false;
+    question.options.forEach((option, i) => {
+        const optionInput = document.querySelector(`.option-input[data-question-index="${index}"][data-option-index="${i}"]`);
+        if (!option.trim()) {
+            if (optionInput) optionInput.classList.add('error');
+            hasEmptyOptions = true;
+            isValid = false;
+        } else {
+            if (optionInput) optionInput.classList.remove('error');
+        }
+    });
+    
+    // Валидация правильного ответа
+    const optionsError = document.getElementById(`optionsError${index}`);
+    if (question.correctAnswer === null) {
+        if (optionsError) optionsError.style.display = 'block';
+        isValid = false;
+    } else {
+        if (optionsError) optionsError.style.display = 'none';
+    }
+    
+    return isValid;
+}
+
+// Валидация всей формы
+function validateAllQuestions() {
+    let allValid = true;
+    
+    currentQuestions.forEach((_, index) => {
+        if (!validateQuestion(index)) {
+            allValid = false;
+        }
+    });
+    
+    return allValid;
+}
+
+// Сброс формы
+function resetForm() {
+    currentQuestions = [{
+        id: 1,
+        text: '',
+        options: ['', '', '', ''],
+        correctAnswer: null
+    }];
+    
+    const form = document.getElementById('new-test-form');
+    if (form) form.reset();
+    
+    const titleInput = document.getElementById('testTitle');
+    if (titleInput) titleInput.value = '';
+    
+    // Скрываем все ошибки
+    document.querySelectorAll('.error-message').forEach(el => {
+        el.style.display = 'none';
+    });
+    
+    document.querySelectorAll('.error').forEach(el => {
+        el.classList.remove('error');
+    });
+}
+
+// Обработчик отправки формы
+async function handleSubmitTest(e) {
+    e.preventDefault();
+    
+    // Валидация названия теста
+    const titleInput = document.getElementById('testTitle');
+    const titleError = document.getElementById('titleError');
+    const title = titleInput?.value.trim() || '';
+    
+    if (!title) {
+        if (titleInput) titleInput.classList.add('error');
+        if (titleError) titleError.style.display = 'block';
+        if (titleInput) titleInput.focus();
+        return;
+    }
+    
+    if (titleInput) titleInput.classList.remove('error');
+    if (titleError) titleError.style.display = 'none';
+    
+    // Валидация всех вопросов
+    if (!validateAllQuestions()) {
+        await Modal.alert({
+            title: 'Ошибка',
+            message: 'Пожалуйста, заполните все поля и выберите правильные ответы'
+        });
+        return;
+    }
+    
+    // Показываем индикатор загрузки
+    Modal.showLoader();
+    
+    try {
+        // Подготовка данных теста
+        const testData = {
+            title: title,
+            questions: currentQuestions.map(q => ({
+                id: q.id,
+                text: q.text.trim(),
+                options: q.options.map(opt => opt.trim()),
+                correctAnswer: q.correctAnswer
+            }))
+        };
+        
+        // Проверяем, что все вопросы имеют правильные ответы
+        const hasInvalidQuestion = testData.questions.some(q => 
+            q.correctAnswer === null || 
+            q.correctAnswer < 0 || 
+            q.correctAnswer > 3
+        );
+        
+        if (hasInvalidQuestion) {
+            throw new Error('Не все вопросы имеют правильный ответ');
+        }
+        
+        // Сохранение теста
+        const testId = TestManager.addTest(testData);
+        
+        // Скрываем индикатор загрузки
+        Modal.hideLoader();
+        
+        // Закрываем модальное окно
+        Modal.close();
+        
+        // Показываем успешное сообщение
+        await Modal.alert({
+            title: 'Успешно!',
+            message: 'Тест успешно создан'
+        });
+        
+        // Переход к созданному тесту
+        window.location.href = `test.html?testId=${testId}`;
+        
+    } catch (error) {
+        console.error('Ошибка создания теста:', error);
+        Modal.hideLoader();
+        await Modal.alert({
+            title: 'Ошибка',
+            message: 'Не удалось создать тест. Убедитесь, что все поля заполнены правильно.'
+        });
+    }
+}
+
+// Экспорт функций для main.js
+window.renderQuestionsForm = renderQuestionsForm;
+window.addQuestion = addQuestion;
+window.removeQuestion = removeQuestion;
+window.handleSubmitTest = handleSubmitTest;
+window.resetForm = resetForm;
+window.hideError = hideError;
+window.showError = showError;
+
+// Инициализация событий формы (для страницы создания теста)
 document.addEventListener('DOMContentLoaded', () => {
-    TestRunner.init();
+    // Кнопки управления вопросами
+    const addQuestionBtn = document.getElementById('addQuestionBtn');
+    const removeQuestionBtn = document.getElementById('removeQuestionBtn');
+    const saveTestBtn = document.getElementById('saveTestBtn');
+    
+    if (addQuestionBtn) {
+        addQuestionBtn.addEventListener('click', addQuestion);
+    }
+    
+    if (removeQuestionBtn) {
+        removeQuestionBtn.addEventListener('click', removeQuestion);
+    }
+    
+    if (saveTestBtn) {
+        // Обработчик для кнопки Сохранить
+        saveTestBtn.addEventListener('click', handleSubmitTest);
+    }
+    
+    // Обработчик формы
+    const form = document.getElementById('new-test-form');
+    if (form) {
+        form.addEventListener('submit', handleSubmitTest);
+    }
 });
