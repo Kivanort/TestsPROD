@@ -14,50 +14,81 @@ const TestRunner = {
         }
         
         // Загрузка теста
-        await TestManager.init();
-        this.currentTest = TestManager.findTestById(testId);
-        
-        if (!this.currentTest) {
-            Modal.alert({
-                title: 'Ошибка',
-                message: 'Тест не найден'
-            }).then(() => {
+        try {
+            await TestManager.init();
+            this.currentTest = TestManager.findTestById(testId);
+            
+            if (!this.currentTest) {
+                await Modal.alert({
+                    title: 'Ошибка',
+                    message: 'Тест не найден'
+                });
                 window.location.href = 'index.html';
+                return;
+            }
+            
+            // Проверяем структуру теста
+            if (!this.currentTest.questions || !Array.isArray(this.currentTest.questions)) {
+                console.error('Некорректная структура теста:', this.currentTest);
+                await Modal.alert({
+                    title: 'Ошибка',
+                    message: 'Некорректная структура теста'
+                });
+                window.location.href = 'index.html';
+                return;
+            }
+            
+            // Загрузка прогресса
+            this.loadProgress();
+            
+            // Настройка кнопок
+            this.setupEventListeners();
+            
+            // Отображение теста
+            this.renderTest();
+            this.renderNavigation();
+            this.showQuestion(this.currentQuestionIndex);
+            
+        } catch (error) {
+            console.error('Ошибка инициализации теста:', error);
+            await Modal.alert({
+                title: 'Ошибка',
+                message: 'Не удалось загрузить тест'
             });
-            return;
+            window.location.href = 'index.html';
         }
-        
-        // Загрузка прогресса
-        this.loadProgress();
-        
-        // Настройка кнопок
-        this.setupEventListeners();
-        
-        // Отображение теста
-        this.renderTest();
-        this.renderNavigation();
-        this.showQuestion(this.currentQuestionIndex);
     },
     
     // Настройка обработчиков событий
     setupEventListeners() {
         // Кнопки навигации
-        document.getElementById('prevQuestionBtn')?.addEventListener('click', () => this.prevQuestion());
-        document.getElementById('nextQuestionBtn')?.addEventListener('click', () => this.nextQuestion());
+        const prevBtn = document.getElementById('prevQuestionBtn');
+        const nextBtn = document.getElementById('nextQuestionBtn');
+        const finishBtn = document.getElementById('finishTestBtn');
+        const resetBtn = document.getElementById('resetTestBtn');
+        const backBtn = document.getElementById('backToListBtn');
         
-        // Кнопка завершения теста
-        document.getElementById('finishTestBtn')?.addEventListener('click', () => this.finishTest());
+        if (prevBtn) {
+            prevBtn.addEventListener('click', () => this.prevQuestion());
+        }
         
-        // Кнопка сброса теста
-        document.getElementById('resetTestBtn')?.addEventListener('click', () => this.resetTest());
+        if (nextBtn) {
+            nextBtn.addEventListener('click', () => this.nextQuestion());
+        }
         
-        // Кнопка возврата к списку тестов
-        document.getElementById('backToListBtn')?.addEventListener('click', () => {
-            window.location.href = 'index.html';
-        });
+        if (finishBtn) {
+            finishBtn.addEventListener('click', () => this.finishTest());
+        }
         
-        // Кнопка прохождения заново (если есть)
-        document.getElementById('resetTestBtn')?.addEventListener('click', () => this.resetTest());
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => this.resetTest());
+        }
+        
+        if (backBtn) {
+            backBtn.addEventListener('click', () => {
+                window.location.href = 'index.html';
+            });
+        }
     },
     
     // Загрузка прогресса
@@ -95,11 +126,12 @@ const TestRunner = {
     // Отображение навигации
     renderNavigation() {
         const navList = document.getElementById('navigationList');
-        if (!navList) return;
+        if (!navList || !this.currentTest || !this.currentTest.questions) return;
         
         navList.innerHTML = this.currentTest.questions.map((question, index) => {
             const isAnswered = this.userAnswers[index] !== undefined;
             const isCorrect = isAnswered && 
+                question.correctAnswer !== undefined &&
                 this.userAnswers[index] === question.correctAnswer;
             
             let className = 'nav-item';
@@ -121,10 +153,13 @@ const TestRunner = {
     
     // Показать вопрос
     showQuestion(index) {
+        if (!this.currentTest || !this.currentTest.questions) return;
         if (index < 0 || index >= this.currentTest.questions.length) return;
         
         this.currentQuestionIndex = index;
         const question = this.currentTest.questions[index];
+        
+        if (!question) return;
         
         // Обновляем навигацию
         this.renderNavigation();
@@ -154,7 +189,7 @@ const TestRunner = {
             let className = 'option-btn';
             let statusIcon = '';
             
-            if (isAnswered) {
+            if (isAnswered && question.correctAnswer !== undefined) {
                 if (optionIndex === question.correctAnswer) {
                     className += ' correct';
                     statusIcon = '✓';
@@ -188,7 +223,7 @@ const TestRunner = {
     
     // Выбор ответа
     selectAnswer(answerIndex) {
-        if (this.isCompleted) return;
+        if (this.isCompleted || !this.currentTest) return;
         
         this.userAnswers[this.currentQuestionIndex] = answerIndex;
         this.saveProgress();
@@ -203,6 +238,7 @@ const TestRunner = {
     
     // Следующий вопрос
     nextQuestion() {
+        if (!this.currentTest || !this.currentTest.questions) return;
         if (this.currentQuestionIndex < this.currentTest.questions.length - 1) {
             this.showQuestion(this.currentQuestionIndex + 1);
         }
@@ -217,6 +253,8 @@ const TestRunner = {
     
     // Завершение теста
     async finishTest() {
+        if (!this.currentTest || !this.currentTest.questions) return;
+        
         const answeredCount = Object.keys(this.userAnswers).length;
         const totalQuestions = this.currentTest.questions.length;
         
@@ -241,6 +279,8 @@ const TestRunner = {
     
     // Показать модальное окно с результатами
     async showResultsModal() {
+        if (!this.currentTest) return;
+        
         const results = this.calculateResults();
         
         // Проверяем, все ли вопросы отвечены
@@ -277,13 +317,18 @@ const TestRunner = {
             buttons.push({
                 text: 'Пройти заново',
                 className: 'btn-primary',
-                onClick: `TestRunner.resetTestFromModal('${modalId}')`
+                onClick: () => {
+                    TestRunner.resetTestFromModal(modalId);
+                }
             });
         } else {
             buttons.push({
                 text: 'Понятно',
                 className: 'btn-primary',
-                onClick: `Modal.close(); Modal.remove('${modalId}')`
+                onClick: () => {
+                    Modal.close();
+                    Modal.remove(modalId);
+                }
             });
         }
         
@@ -306,13 +351,17 @@ const TestRunner = {
     
     // Рассчитать результаты
     calculateResults() {
+        if (!this.currentTest || !this.currentTest.questions) {
+            return { correct: 0, incorrect: 0, unanswered: 0, total: 0 };
+        }
+        
         let correct = 0;
         let incorrect = 0;
         
         this.currentTest.questions.forEach((question, index) => {
             const userAnswer = this.userAnswers[index];
             
-            if (userAnswer !== undefined) {
+            if (userAnswer !== undefined && question.correctAnswer !== undefined) {
                 if (userAnswer === question.correctAnswer) {
                     correct++;
                 } else {
@@ -378,25 +427,25 @@ const TestRunner = {
 };
 
 // Глобальные функции для теста
-function selectAnswer(index) {
+window.selectAnswer = function(index) {
     TestRunner.selectAnswer(index);
-}
+};
 
-function nextQuestion() {
+window.nextQuestion = function() {
     TestRunner.nextQuestion();
-}
+};
 
-function prevQuestion() {
+window.prevQuestion = function() {
     TestRunner.prevQuestion();
-}
+};
 
-function finishTest() {
+window.finishTest = function() {
     TestRunner.finishTest();
-}
+};
 
-function resetTest() {
+window.resetTest = function() {
     TestRunner.resetTest();
-}
+};
 
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', () => {
